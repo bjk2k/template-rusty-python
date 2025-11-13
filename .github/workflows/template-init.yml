@@ -1,14 +1,46 @@
 name: Initialize Template
 
+# Manual trigger only - prevents accidental initialization during template development
+# Users must manually run this after creating a repository from the template
 on:
-  create:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: "Project name (kebab-case, used in pyproject.toml)"
+        required: false
+        default: ""
+      python_package_name:
+        description: "Python package name (snake_case, used for imports)"
+        required: false
+        default: ""
+      rust_core_module_name:
+        description: "Rust core module name (snake_case)"
+        required: false
+        default: ""
+      author_name:
+        description: "Author name"
+        required: false
+        default: ""
+      author_email:
+        description: "Author email"
+        required: false
+        default: ""
+      project_description:
+        description: "Project description"
+        required: false
+        default: "Add your description here"
+      force_reinitialize:
+        description: "Force re-initialization (overrides safety check)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   initialize:
-    if: github.repository != 'your-username/template-rusty-python'
     runs-on: ubuntu-latest
 
     steps:
@@ -18,76 +50,347 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Check if template has been initialized
-        id: check_init
+      - name: Detect if this is a template repository
+        id: template_check
         run: |
-          if [ -f ".template-initialized" ]; then
-            echo "already_initialized=true" >> $GITHUB_OUTPUT
+          # Check if we're running in the original template repository
+          CURRENT_REPO="${{ github.repository }}"
+
+          # Simple heuristic: if repo name contains "template" and common template indicators exist
+          if [[ "$CURRENT_REPO" == *"template"* ]] && [ -f "TEMPLATE.md" ] && [ -f ".github/template.yml" ]; then
+            echo "is_template_repo=true" >> $GITHUB_OUTPUT
+            echo "⚠️ This appears to be the template repository itself"
           else
-            echo "already_initialized=false" >> $GITHUB_OUTPUT
+            echo "is_template_repo=false" >> $GITHUB_OUTPUT
+            echo "✅ This appears to be a repository created from the template"
           fi
 
-      - name: Get repository info
-        if: steps.check_init.outputs.already_initialized == 'false'
+      - name: Check if already initialized
+        id: check_init
+        run: |
+          if [ -f ".template-initialized" ] && [ "${{ inputs.force_reinitialize }}" != "true" ]; then
+            echo "already_initialized=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Template already initialized. Use 'force_reinitialize' input to override."
+          else
+            echo "already_initialized=false" >> $GITHUB_OUTPUT
+            if [ "${{ inputs.force_reinitialize }}" == "true" ]; then
+              echo "🔄 Force re-initialization requested"
+            fi
+          fi
+
+      - name: Exit if template repository
+        if: steps.template_check.outputs.is_template_repo == 'true'
+        run: |
+          echo "🛑 This workflow should not be run on the template repository itself!"
+          echo "This workflow is designed to initialize repositories created FROM the template."
+          echo "If you need to test the initialization process, create a test repository from this template."
+          exit 1
+
+      - name: Exit if already initialized
+        if: steps.check_init.outputs.already_initialized == 'true'
+        run: |
+          echo "⏭️ Template already initialized. Skipping initialization."
+          echo "If you need to re-initialize, set 'force_reinitialize' to true."
+          exit 0
+
+      - name: Determine project parameters
         id: repo_info
         run: |
+          # Use input values if provided, otherwise derive from repository name
           REPO_NAME="${{ github.event.repository.name }}"
-          echo "repo_name=${REPO_NAME}" >> $GITHUB_OUTPUT
 
-          # Convert kebab-case to snake_case for Python package
-          PYTHON_PACKAGE=$(echo "${REPO_NAME}" | sed 's/-/_/g')
+          # Project name (kebab-case)
+          if [ -n "${{ inputs.project_name }}" ]; then
+            PROJECT_NAME="${{ inputs.project_name }}"
+          else
+            PROJECT_NAME="$REPO_NAME"
+          fi
+          echo "project_name=${PROJECT_NAME}" >> $GITHUB_OUTPUT
+
+          # Python package name (snake_case)
+          if [ -n "${{ inputs.python_package_name }}" ]; then
+            PYTHON_PACKAGE="${{ inputs.python_package_name }}"
+          else
+            # Convert kebab-case to snake_case
+            PYTHON_PACKAGE=$(echo "${PROJECT_NAME}" | sed 's/-/_/g' | sed 's/[^a-zA-Z0-9_]/_/g' | tr '[:upper:]' '[:lower:]')
+          fi
           echo "python_package=${PYTHON_PACKAGE}" >> $GITHUB_OUTPUT
 
-          # Rust core module name (add _core suffix)
-          RUST_MODULE="${PYTHON_PACKAGE}_core"
+          # Rust core module name
+          if [ -n "${{ inputs.rust_core_module_name }}" ]; then
+            RUST_MODULE="${{ inputs.rust_core_module_name }}"
+          else
+            # Add _core suffix to python package name
+            RUST_MODULE="${PYTHON_PACKAGE}_core"
+          fi
           echo "rust_module=${RUST_MODULE}" >> $GITHUB_OUTPUT
 
-      - name: Initialize template
-        if: steps.check_init.outputs.already_initialized == 'false'
+          # Author information
+          if [ -n "${{ inputs.author_name }}" ]; then
+            AUTHOR_NAME="${{ inputs.author_name }}"
+          else
+            # Try to get from repository owner, fallback to actor
+            AUTHOR_NAME="${{ github.repository_owner }}"
+            if [ "$AUTHOR_NAME" == "" ]; then
+              AUTHOR_NAME="${{ github.actor }}"
+            fi
+          fi
+          echo "author_name=${AUTHOR_NAME}" >> $GITHUB_OUTPUT
+
+          if [ -n "${{ inputs.author_email }}" ]; then
+            AUTHOR_EMAIL="${{ inputs.author_email }}"
+          else
+            # Use noreply email as fallback
+            AUTHOR_EMAIL="${{ github.actor }}@users.noreply.github.com"
+          fi
+          echo "author_email=${AUTHOR_EMAIL}" >> $GITHUB_OUTPUT
+
+          # Project description
+          PROJECT_DESC="${{ inputs.project_description }}"
+          if [ "$PROJECT_DESC" == "" ]; then
+            PROJECT_DESC="Add your description here"
+          fi
+          echo "project_description=${PROJECT_DESC}" >> $GITHUB_OUTPUT
+
+          # Log the determined values
+          echo "📋 Project Parameters:"
+          echo "  Project Name: ${PROJECT_NAME}"
+          echo "  Python Package: ${PYTHON_PACKAGE}"
+          echo "  Rust Module: ${RUST_MODULE}"
+          echo "  Author: ${AUTHOR_NAME} <${AUTHOR_EMAIL}>"
+          echo "  Description: ${PROJECT_DESC}"
+
+      - name: Validate parameters
         env:
-          PROJECT_NAME: ${{ steps.repo_info.outputs.repo_name }}
+          PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
           PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
           RUST_CORE_MODULE_NAME: ${{ steps.repo_info.outputs.rust_module }}
-          AUTHOR_NAME: ${{ github.event.repository.owner.login }}
-          AUTHOR_EMAIL: ${{ github.event.repository.owner.email || format('{0}@users.noreply.github.com', github.event.repository.owner.login) }}
-          PROJECT_DESCRIPTION: "Add your description here"
         run: |
-          # Replace placeholders in files
-          find . -type f \( -name "*.toml" -o -name "*.py" -o -name "*.rs" -o -name "*.sh" -o -name "*.md" -o -name "*.nix" -o -name ".envrc" -o -name "justfile" \) | while read file; do
-            if [[ "$file" != *".git"* ]] && [[ "$file" != *"template-init.yml"* ]]; then
-              sed -i "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" "$file"
-              sed -i "s|{{PYTHON_PACKAGE_NAME}}|${PYTHON_PACKAGE_NAME}|g" "$file"
-              sed -i "s|{{RUST_CORE_MODULE_NAME}}|${RUST_CORE_MODULE_NAME}|g" "$file"
-              sed -i "s|{{AUTHOR_NAME}}|${AUTHOR_NAME}|g" "$file"
-              sed -i "s|{{AUTHOR_EMAIL}}|${AUTHOR_EMAIL}|g" "$file"
-              sed -i "s|{{PROJECT_DESCRIPTION}}|${PROJECT_DESCRIPTION}|g" "$file"
-              sed -i "s|PYTHON_PACKAGE_NAME_PLACEHOLDER|${PYTHON_PACKAGE_NAME}|g" "$file"
+          # Validate project name (kebab-case)
+          if ! echo "$PROJECT_NAME" | grep -qE '^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]*$'; then
+            echo "❌ Invalid project name: $PROJECT_NAME"
+            echo "Project name should be kebab-case (lowercase, hyphens allowed)"
+            exit 1
+          fi
+
+          # Validate Python package name (snake_case)
+          if ! echo "$PYTHON_PACKAGE_NAME" | grep -qE '^[a-z][a-z0-9_]*$'; then
+            echo "❌ Invalid Python package name: $PYTHON_PACKAGE_NAME"
+            echo "Python package name should be snake_case (lowercase, underscores allowed)"
+            exit 1
+          fi
+
+          # Validate Rust module name (snake_case)
+          if ! echo "$RUST_CORE_MODULE_NAME" | grep -qE '^[a-z][a-z0-9_]*$'; then
+            echo "❌ Invalid Rust module name: $RUST_CORE_MODULE_NAME"
+            echo "Rust module name should be snake_case (lowercase, underscores allowed)"
+            exit 1
+          fi
+
+          echo "✅ All parameters are valid"
+
+      - name: Replace template placeholders
+        env:
+          PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
+          PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
+          RUST_CORE_MODULE_NAME: ${{ steps.repo_info.outputs.rust_module }}
+          AUTHOR_NAME: ${{ steps.repo_info.outputs.author_name }}
+          AUTHOR_EMAIL: ${{ steps.repo_info.outputs.author_email }}
+          PROJECT_DESCRIPTION: ${{ steps.repo_info.outputs.project_description }}
+        run: |
+          echo "🔄 Replacing template placeholders..."
+
+          # Find and replace placeholders in non-workflow files
+          find . -type f \( \
+            -name "*.toml" -o \
+            -name "*.py" -o \
+            -name "*.rs" -o \
+            -name "*.sh" -o \
+            -name "*.md" -o \
+            -name "*.nix" -o \
+            -name ".envrc" -o \
+            -name "justfile" \
+          \) -not -path "./.git/*" -not -path "./.github/workflows/*" | while read -r file; do
+            if [ -f "$file" ]; then
+              # Use temporary file to avoid issues with in-place editing
+              temp_file=$(mktemp)
+              sed "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g; \
+                   s|{{PYTHON_PACKAGE_NAME}}|${PYTHON_PACKAGE_NAME}|g; \
+                   s|{{RUST_CORE_MODULE_NAME}}|${RUST_CORE_MODULE_NAME}|g; \
+                   s|{{AUTHOR_NAME}}|${AUTHOR_NAME}|g; \
+                   s|{{AUTHOR_EMAIL}}|${AUTHOR_EMAIL}|g; \
+                   s|{{PROJECT_DESCRIPTION}}|${PROJECT_DESCRIPTION}|g; \
+                   s|PYTHON_PACKAGE_NAME_PLACEHOLDER|${PYTHON_PACKAGE_NAME}|g" \
+                   "$file" > "$temp_file" && mv "$temp_file" "$file"
             fi
           done
 
-          # Rename Python package directory
-          if [ -d "python/src/PYTHON_PACKAGE_NAME_PLACEHOLDER" ]; then
-            mv "python/src/PYTHON_PACKAGE_NAME_PLACEHOLDER" "python/src/${PYTHON_PACKAGE_NAME}"
+          echo "✅ Template placeholders replaced"
+
+      - name: Handle CI workflow separately
+        env:
+          PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
+          PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
+          RUST_CORE_MODULE_NAME: ${{ steps.repo_info.outputs.rust_module }}
+        run: |
+          echo "🔧 Creating customized CI workflow..."
+
+          # Create a new CI workflow with placeholders replaced
+          if [ -f ".github/workflows/ci.yml" ]; then
+            temp_file=$(mktemp)
+            sed "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g; \
+                 s|{{PYTHON_PACKAGE_NAME}}|${PYTHON_PACKAGE_NAME}|g; \
+                 s|{{RUST_CORE_MODULE_NAME}}|${RUST_CORE_MODULE_NAME}|g" \
+                 ".github/workflows/ci.yml" > "$temp_file"
+
+            # Replace the original with the processed version
+            mv "$temp_file" ".github/workflows/ci.yml"
+            echo "✅ CI workflow updated"
+          else
+            echo "ℹ️ No CI workflow found to update"
           fi
 
-          # Create marker file to prevent re-initialization
-          touch .template-initialized
+      - name: Rename Python package directory
+        env:
+          PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
+        run: |
+          if [ -d "python/src/PYTHON_PACKAGE_NAME_PLACEHOLDER" ]; then
+            echo "📁 Renaming Python package directory to: ${PYTHON_PACKAGE_NAME}"
+            mv "python/src/PYTHON_PACKAGE_NAME_PLACEHOLDER" "python/src/${PYTHON_PACKAGE_NAME}"
+            echo "✅ Python package directory renamed"
+          else
+            echo "⚠️ Python package placeholder directory not found, skipping rename"
+          fi
 
-          # Remove template-specific files
+      - name: Update Cargo.lock hash placeholder
+        run: |
+          # The Cargo.lock hash will be invalid after template initialization
+          # We'll remove it so it gets generated on first build
+          if [ -f "flake.nix" ]; then
+            sed -i 's/cargoHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";/cargoHash = ""; # Will be updated on first build/' flake.nix
+          fi
+
+      - name: Clean up template-specific files
+        run: |
+          echo "🧹 Cleaning up template-specific files..."
+
+          # Remove template configuration and documentation
           rm -f .github/template.yml
+          rm -f TEMPLATE.md
+
+          echo "✅ Template cleanup complete"
+
+      - name: Create initialization marker
+        env:
+          PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
+          PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
+          RUST_CORE_MODULE_NAME: ${{ steps.repo_info.outputs.rust_module }}
+          AUTHOR_NAME: ${{ steps.repo_info.outputs.author_name }}
+          AUTHOR_EMAIL: ${{ steps.repo_info.outputs.author_email }}
+          PROJECT_DESCRIPTION: ${{ steps.repo_info.outputs.project_description }}
+        run: |
+          cat > .template-initialized << EOF
+          # Template Initialization Record
+          # This file indicates that the template has been initialized
+          # Generated on: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          # Initialized by: ${{ github.actor }}
+
+          PROJECT_NAME="${PROJECT_NAME}"
+          PYTHON_PACKAGE_NAME="${PYTHON_PACKAGE_NAME}"
+          RUST_CORE_MODULE_NAME="${RUST_CORE_MODULE_NAME}"
+          AUTHOR_NAME="${AUTHOR_NAME}"
+          AUTHOR_EMAIL="${AUTHOR_EMAIL}"
+          PROJECT_DESCRIPTION="${PROJECT_DESCRIPTION}"
+          TEMPLATE_VERSION="$(date -u +"%Y-%m-%d")"
+          INITIALIZED_FROM="${{ github.repository }}"
+          EOF
+
+          echo "✅ Initialization marker created"
 
       - name: Commit changes
-        if: steps.check_init.outputs.already_initialized == 'false'
+        env:
+          PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
         run: |
+          # Configure git
           git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.name "Template Initialization Bot"
+
+          # Add all changes
           git add .
-          git commit -m "Initialize project from template" || exit 0
-          git push
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            echo "📝 Committing template initialization changes..."
+            git commit -m "🎉 Initialize ${PROJECT_NAME} from template
+
+            - Replace template placeholders with project-specific values
+            - Rename Python package directory
+            - Clean up template-specific files
+            - Set up project structure
+
+            Generated by template-init workflow"
+
+            # Push changes
+            git push origin ${{ github.ref_name }}
+            echo "✅ Changes committed and pushed"
+          fi
 
       - name: Remove initialization workflow
-        if: steps.check_init.outputs.already_initialized == 'false'
         run: |
-          git rm .github/workflows/template-init.yml
-          git commit -m "Remove template initialization workflow"
-          git push
+          echo "🗑️ Removing template initialization workflow..."
+
+          # Remove this workflow file
+          if [ -f ".github/workflows/template-init.yml" ]; then
+            git rm .github/workflows/template-init.yml
+
+            git commit -m "🧹 Remove template initialization workflow
+
+            This workflow is only needed once during template initialization.
+            The project is now ready for development!" || {
+              echo "⚠️ Failed to commit workflow removal, but initialization completed successfully"
+            }
+
+            git push origin ${{ github.ref_name }} || {
+              echo "⚠️ Failed to push workflow removal, but initialization completed successfully"
+              echo "You may need to manually remove .github/workflows/template-init.yml"
+            }
+
+            echo "✅ Initialization workflow removed"
+          else
+            echo "ℹ️ Initialization workflow already removed"
+          fi
+
+      - name: Summary
+        env:
+          PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
+          PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
+        run: |
+          echo "🎉 Template initialization complete!"
+          echo ""
+          echo "📋 Your project '${PROJECT_NAME}' is now ready for development."
+          echo ""
+          echo "🚀 Next steps:"
+          echo "1. Clone your repository locally"
+          echo "2. Install Nix (recommended) or set up manually"
+          echo "3. Run 'just setup' to initialize the development environment"
+          echo "4. Run 'just check' to verify everything works"
+          echo ""
+          echo "📚 Documentation:"
+          echo "- README.md - Main project documentation"
+          echo "- NIX.md - Nix development environment guide"
+          echo "- DEVELOPMENT.md - Detailed development guide"
+          echo ""
+          echo "🔧 Available commands (with Just):"
+          echo "- just setup   # Initial setup"
+          echo "- just dev     # Development build"
+          echo "- just test    # Run tests"
+          echo "- just --list  # Show all commands"
+
+      - name: Note about CI workflow
+        run: |
+          echo ""
+          echo "ℹ️ Note: The CI workflow has been updated with your project details."
+          echo "If you see any workflow-related issues, they should resolve after the first successful push."
+          echo "You can always manually edit .github/workflows/ci.yml if needed."

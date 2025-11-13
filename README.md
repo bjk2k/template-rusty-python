@@ -53,13 +53,25 @@ See [NIX.md](NIX.md) for detailed Nix setup instructions.
 
 ### With Nix (Recommended)
 
-1. **Clone and setup:**
+1. **Create repository from template:**
+   - Click "Use this template" on GitHub
+   - Create your new repository
+
+2. **Initialize the template:**
    ```bash
-   git clone <your-repo-url>
-   cd {{PROJECT_NAME}}
+   # Go to your new repository on GitHub
+   # Navigate to Actions tab
+   # Run "Initialize Template" workflow manually
+   # (This replaces all {{placeholders}} with your project values)
    ```
 
-2. **Enter the development environment:**
+3. **Clone and setup:**
+   ```bash
+   git clone <your-repo-url>
+   cd <your-project-name>
+   ```
+
+4. **Enter the development environment:**
    ```bash
    # If using direnv (recommended)
    direnv allow
@@ -68,12 +80,12 @@ See [NIX.md](NIX.md) for detailed Nix setup instructions.
    nix develop
    ```
 
-3. **Set up and build:**
+5. **Set up and build:**
    ```bash
    just setup  # Sets up environment and builds everything
    ```
 
-4. **Test the installation:**
+6. **Test the installation:**
    ```bash
    just check  # Runs sanity checks
    ```
@@ -82,21 +94,26 @@ That's it! The Nix environment provides all dependencies automatically.
 
 ### Without Nix (Manual Setup)
 
-1. **Clone and setup:**
+1. **Create and initialize repository:**
+   - Click "Use this template" on GitHub
+   - Run the "Initialize Template" workflow in the Actions tab
+   - This will replace all template placeholders with your project values
+
+2. **Clone and setup:**
    ```bash
    git clone <your-repo-url>
-   cd {{PROJECT_NAME}}
+   cd <your-project-name>
    ```
 
-2. **Build and install:**
+3. **Build and install:**
    ```bash
    ./build.sh
    ```
 
-3. **Test the installation:**
+4. **Test the installation:**
    ```bash
    cd python
-   uv run python -c "from {{PYTHON_PACKAGE_NAME}} import add; print(add(2, 3))"
+   uv run python -c "from <your_package_name> import add; print(add(2, 3))"
    ```
 
 ## Development Workflow
@@ -270,6 +287,40 @@ If you encounter issues, try a clean build:
 **Without Nix:**
 - Ensure all prerequisites are installed
 - Try recreating the virtual environment
+
+## Template Initialization
+
+This repository is a GitHub template. When you create a new repository from this template:
+
+1. **Create the repository** using GitHub's "Use this template" button
+2. **Run the initialization workflow**:
+   - Go to the "Actions" tab in your new repository
+   - Find the "Initialize Template" workflow
+   - Click "Run workflow" and provide your project details (optional)
+   - The workflow will automatically replace all `{{placeholders}}` with your values
+
+### Template Parameters
+
+The initialization workflow accepts these optional parameters:
+
+- **project_name**: Project name (kebab-case, used in `pyproject.toml`)
+- **python_package_name**: Python package name (snake_case, used for imports)
+- **rust_core_module_name**: Rust core module name (snake_case)
+- **author_name**: Your name
+- **author_email**: Your email
+- **project_description**: Brief project description
+
+If you don't provide these, the workflow will derive sensible defaults from your repository name and GitHub profile.
+
+### Troubleshooting Template Initialization
+
+**Template Detection Issues**: The workflow automatically detects if it's running on the template vs. a created repository. If detection fails, it will exit safely.
+
+**Workflow Failures**: If the initialization workflow fails, you can re-run it from the Actions tab. The workflow is designed to be idempotent and won't cause issues if run multiple times.
+
+### Manual Template Development
+
+If you're working on the template itself (not using it), you can make changes without triggering the initialization workflow since it only runs on manual dispatch.
 
 ## Contributing
 
