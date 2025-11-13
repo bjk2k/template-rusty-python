@@ -1,0 +1,28 @@
+name: Rust-Python Hybrid Template
+description: 'A template for creating Python packages with Rust extensions using PyO3 and Maturin'
+tags:
+  - python
+  - rust
+  - pyo3
+  - maturin
+  - hybrid
+  - template
+prompts:
+  - name: project_name
+    description: 'Project name (kebab-case, used in pyproject.toml)'
+    required: true
+  - name: python_package_name
+    description: 'Python package name (snake_case, used for imports)'
+    required: true
+  - name: rust_core_module_name
+    description: 'Rust core module name (snake_case, used in Rust lib)'
+    required: true
+  - name: author_name
+    description: 'Author name'
+    required: true
+  - name: author_email
+    description: 'Author email'
+    required: true
+  - name: project_description
+    description: 'Project description'
+    required: true

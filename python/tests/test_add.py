@@ -1,4 +1,4 @@
-from template_project import add
+from {{PYTHON_PACKAGE_NAME}} import add
 
 
 def test_add():

@@ -1,4 +1,4 @@
-import template_project_core as core
+import {{RUST_CORE_MODULE_NAME}} as core
 
 
 def add(a: int, b: int) -> int:

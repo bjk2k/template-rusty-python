@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          rust-core/target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('rust-core/Cargo.lock') }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          python/.venv/
+        key: ${{ runner.os }}-python-${{ matrix.python-version }}-${{ hashFiles('python/uv.lock') }}
+
+    - name: Setup project
+      run: |
+        cd python
+        uv venv --python ${{ matrix.python-version }}
+        uv sync
+
+    - name: Build Rust extension
+      run: |
+        cd python
+        uv run maturin develop
+
+    - name: Install package
+      run: |
+        cd python
+        uv pip install -e .
+
+    - name: Run tests
+      run: |
+        cd python
+        uv run pytest -v
+
+    - name: Test imports
+      run: |
+        cd python
+        uv run python -c "import {{RUST_CORE_MODULE_NAME}} as core; print('Rust core loaded successfully')"
+        uv run python -c "from {{PYTHON_PACKAGE_NAME}} import add; print('Python package loaded successfully')"
+        uv run python -c "from {{PYTHON_PACKAGE_NAME}} import add; assert add(2, 3) == 5; print('Functionality test passed')"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Setup Python environment
+      run: |
+        cd python
+        uv venv
+        uv sync
+
+    - name: Check Python formatting with Black
+      run: |
+        cd python
+        uv run black --check .
+
+    - name: Check Rust formatting
+      run: |
+        cd rust-core
+        cargo fmt --check
+
+    - name: Run Clippy
+      run: |
+        cd rust-core
+        cargo clippy -- -D warnings
+
+  build-wheels:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Build wheels
+      run: |
+        cd python
+        uv venv
+        uv sync
+        uv run maturin build --release
+
+    - name: Upload wheels
+      uses: actions/upload-artifact@v3
+      with:
+        name: wheels-${{ matrix.os }}
+        path: python/target/wheels/

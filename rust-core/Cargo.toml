@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "template_project_core"
+name = "{{RUST_CORE_MODULE_NAME}}"
 crate-type = ["cdylib"]
 
 [dependencies]

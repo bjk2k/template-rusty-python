@@ -1,10 +1,10 @@
 [project]
-name = "template-project"
+name = "{{PROJECT_NAME}}"
 version = "0.1.0"
-description = "Add your description here"
+description = "{{PROJECT_DESCRIPTION}}"
 readme = "README.md"
 authors = [
-    { name = "Ben-Jasper Kettlitz", email = "b-jk@gmx.net" }
+    { name = "{{AUTHOR_NAME}}", email = "{{AUTHOR_EMAIL}}" }
 ]
 requires-python = ">=3.13"
 dependencies = [
@@ -29,9 +29,8 @@ manifest-path = "../rust-core/Cargo.toml"
 python-source = "src"
 
 # Explicitly tell maturin which pure-Python package(s) to ship
-python-packages = ["template_project"]
+python-packages = ["PYTHON_PACKAGE_NAME_PLACEHOLDER"]
 
 [build-system]
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
-
