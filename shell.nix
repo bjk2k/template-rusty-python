@@ -36,10 +36,8 @@ let
       openssl
     ]
     ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
-      # macOS specific dependencies
-      pkgs.darwin.apple_sdk.frameworks.Security
-      pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-      pkgs.libiconv
+      # macOS specific dependencies - using new SDK pattern
+      pkgs.apple-sdk
     ];
 
   # Development tools

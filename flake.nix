@@ -51,10 +51,8 @@
             openssl
           ]
           ++ lib.optionals stdenv.isDarwin [
-            # macOS specific dependencies
-            darwin.apple_sdk.frameworks.Security
-            darwin.apple_sdk.frameworks.SystemConfiguration
-            libiconv
+            # macOS specific dependencies - using new SDK pattern
+            pkgs.apple-sdk
           ];
 
         # Development tools
