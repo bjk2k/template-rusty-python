@@ -1,0 +1,37 @@
+[project]
+name = "template-project"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Ben-Jasper Kettlitz", email = "b-jk@gmx.net" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.4",
+    "plotly>=6.4.0",
+]
+
+[dependency-groups]
+dev = [
+    "black[jupyter]>=25.11.0",
+    "ipykernel>=7.1.0",
+    "jupyter>=1.1.1",
+    "pytest>=9.0.1",
+    "maturin>=1.10.1",
+]
+
+[tool.maturin]
+# Rust crate
+manifest-path = "../rust-core/Cargo.toml"
+
+# Where to find Python packages for the wheel
+python-source = "src"
+
+# Explicitly tell maturin which pure-Python package(s) to ship
+python-packages = ["template_project"]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
