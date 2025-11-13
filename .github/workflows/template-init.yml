@@ -227,28 +227,45 @@ jobs:
 
           echo "✅ Template placeholders replaced"
 
-      - name: Handle CI workflow separately
+      - name: Create workflow update instructions
         env:
           PROJECT_NAME: ${{ steps.repo_info.outputs.project_name }}
           PYTHON_PACKAGE_NAME: ${{ steps.repo_info.outputs.python_package }}
           RUST_CORE_MODULE_NAME: ${{ steps.repo_info.outputs.rust_module }}
         run: |
-          echo "🔧 Creating customized CI workflow..."
+          echo "📝 Creating workflow update instructions..."
 
-          # Create a new CI workflow with placeholders replaced
+          # Create a script to update workflow files manually
+          cat > update-workflows.sh << 'EOF'
+          #!/bin/bash
+          # Post-initialization workflow update script
+          # Run this manually after template initialization
+
+          echo "🔧 Updating workflow files with project-specific values..."
+
           if [ -f ".github/workflows/ci.yml" ]; then
-            temp_file=$(mktemp)
-            sed "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g; \
-                 s|{{PYTHON_PACKAGE_NAME}}|${PYTHON_PACKAGE_NAME}|g; \
-                 s|{{RUST_CORE_MODULE_NAME}}|${RUST_CORE_MODULE_NAME}|g" \
-                 ".github/workflows/ci.yml" > "$temp_file"
-
-            # Replace the original with the processed version
-            mv "$temp_file" ".github/workflows/ci.yml"
+            sed -i "s|{{PROJECT_NAME}}|PROJECT_NAME_VALUE|g; \
+                    s|{{PYTHON_PACKAGE_NAME}}|PYTHON_PACKAGE_VALUE|g; \
+                    s|{{RUST_CORE_MODULE_NAME}}|RUST_CORE_MODULE_VALUE|g" \
+                    ".github/workflows/ci.yml"
             echo "✅ CI workflow updated"
-          else
-            echo "ℹ️ No CI workflow found to update"
           fi
+
+          echo "🧹 Cleaning up..."
+          rm -f update-workflows.sh
+
+          echo "✅ Workflow files updated successfully!"
+          EOF
+
+          # Replace placeholders in the script
+          sed -i "s|PROJECT_NAME_VALUE|${PROJECT_NAME}|g; \
+                  s|PYTHON_PACKAGE_VALUE|${PYTHON_PACKAGE_NAME}|g; \
+                  s|RUST_CORE_MODULE_VALUE|${RUST_CORE_MODULE_NAME}|g" \
+                  update-workflows.sh
+
+          chmod +x update-workflows.sh
+
+          echo "✅ Workflow update script created"
 
       - name: Rename Python package directory
         env:
@@ -315,8 +332,9 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "Template Initialization Bot"
 
-          # Add all changes
+          # Add all changes EXCEPT workflow files
           git add .
+          git reset HEAD .github/workflows/ 2>/dev/null || true
 
           # Check if there are changes to commit
           if git diff --staged --quiet; then
@@ -342,25 +360,20 @@ jobs:
           echo "🗑️ Removing template initialization workflow..."
 
           # Remove this workflow file
-          if [ -f ".github/workflows/template-init.yml" ]; then
-            git rm .github/workflows/template-init.yml
+          git rm .github/workflows/template-init.yml
 
-            git commit -m "🧹 Remove template initialization workflow
+          git commit -m "🧹 Remove template initialization workflow
 
-            This workflow is only needed once during template initialization.
-            The project is now ready for development!" || {
-              echo "⚠️ Failed to commit workflow removal, but initialization completed successfully"
-            }
+          Template initialization complete. Workflow files need manual update.
+          Run './update-workflows.sh' to complete the setup." || {
+            echo "⚠️ Failed to commit workflow removal, but initialization completed"
+          }
 
-            git push origin ${{ github.ref_name }} || {
-              echo "⚠️ Failed to push workflow removal, but initialization completed successfully"
-              echo "You may need to manually remove .github/workflows/template-init.yml"
-            }
+          git push origin ${{ github.ref_name }} || {
+            echo "⚠️ Failed to push workflow removal, but initialization completed"
+          }
 
-            echo "✅ Initialization workflow removed"
-          else
-            echo "ℹ️ Initialization workflow already removed"
-          fi
+          echo "✅ Initialization workflow removed"
 
       - name: Summary
         env:
@@ -382,15 +395,14 @@ jobs:
           echo "- NIX.md - Nix development environment guide"
           echo "- DEVELOPMENT.md - Detailed development guide"
           echo ""
+          echo "⚠️  IMPORTANT: Complete the setup by running:"
+          echo "  ./update-workflows.sh"
+          echo ""
+          echo "This will update the CI workflow files with your project details."
+          echo "The script will delete itself after running."
+          echo ""
           echo "🔧 Available commands (with Just):"
           echo "- just setup   # Initial setup"
           echo "- just dev     # Development build"
           echo "- just test    # Run tests"
           echo "- just --list  # Show all commands"
-
-      - name: Note about CI workflow
-        run: |
-          echo ""
-          echo "ℹ️ Note: The CI workflow has been updated with your project details."
-          echo "If you see any workflow-related issues, they should resolve after the first successful push."
-          echo "You can always manually edit .github/workflows/ci.yml if needed."

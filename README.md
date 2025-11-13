@@ -65,10 +65,13 @@ See [NIX.md](NIX.md) for detailed Nix setup instructions.
    # (This replaces all {{placeholders}} with your project values)
    ```
 
-3. **Clone and setup:**
+3. **Clone and complete setup:**
    ```bash
    git clone <your-repo-url>
    cd <your-project-name>
+   
+   # Complete the initialization
+   ./update-workflows.sh
    ```
 
 4. **Enter the development environment:**
@@ -99,10 +102,13 @@ That's it! The Nix environment provides all dependencies automatically.
    - Run the "Initialize Template" workflow in the Actions tab
    - This will replace all template placeholders with your project values
 
-2. **Clone and setup:**
+2. **Clone and complete setup:**
    ```bash
    git clone <your-repo-url>
    cd <your-project-name>
+   
+   # Complete the initialization
+   ./update-workflows.sh
    ```
 
 3. **Build and install:**
@@ -297,7 +303,11 @@ This repository is a GitHub template. When you create a new repository from this
    - Go to the "Actions" tab in your new repository
    - Find the "Initialize Template" workflow
    - Click "Run workflow" and provide your project details (optional)
-   - The workflow will automatically replace all `{{placeholders}}` with your values
+   - The workflow will replace all `{{placeholders}}` with your values
+3. **Complete the setup**:
+   - Clone your repository locally
+   - Run `./update-workflows.sh` to update CI workflow files
+   - This script will automatically delete itself after running
 
 ### Template Parameters
 
@@ -312,11 +322,20 @@ The initialization workflow accepts these optional parameters:
 
 If you don't provide these, the workflow will derive sensible defaults from your repository name and GitHub profile.
 
+### Why Two Steps?
+
+GitHub Actions security prevents workflows from modifying other workflow files directly. The two-step process ensures:
+- ✅ Safe initialization without permission issues
+- ✅ Proper workflow file updates with your project values
+- ✅ No need for special tokens or permissions
+
 ### Troubleshooting Template Initialization
 
 **Template Detection Issues**: The workflow automatically detects if it's running on the template vs. a created repository. If detection fails, it will exit safely.
 
 **Workflow Failures**: If the initialization workflow fails, you can re-run it from the Actions tab. The workflow is designed to be idempotent and won't cause issues if run multiple times.
+
+**Missing update-workflows.sh**: If you don't see this script after initialization, the workflow may have failed partway through. Re-run the initialization workflow.
 
 ### Manual Template Development
 
